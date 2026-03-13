@@ -5,4 +5,5 @@ export * from './primitives/Typography';
 export * from './primitives/Stack';
 export * from './primitives/Button';
 export * from './plugins/UIPlugin';
+export * from './modules/ThemeModule';
 export * from './types/ui.types';
