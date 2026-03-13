@@ -10,3 +10,4 @@ export * from './types/ui.types';
 export * from './primitives/Image';
 export * from './primitives/ErrorBoundary';
 export * from './hooks/useForm';
+export * from './modules/DevTools';
