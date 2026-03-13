@@ -1,5 +1,5 @@
 import { BrokerComponent } from '../core/BrokerComponent';
-import { Context } from 'isomorphic-core';
+import { Context } from 'isomorphic-registry';
 
 /**
  * RouteConfig — Definition for a single application route.

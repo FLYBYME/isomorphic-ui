@@ -222,7 +222,9 @@ export abstract class BrokerComponent {
         return document.createTextNode(String(item ?? ''));
     }
 
-    public mount(parent: HTMLElement): void {
+    public mount(parent: HTMLElement, app?: any): void {
+        if (app) (this as any).app = app;
+        
         // Plugin: onBeforeMount
         for (const plugin of this.plugins) plugin.onBeforeMount?.(this);
 

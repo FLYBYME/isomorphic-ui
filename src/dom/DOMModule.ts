@@ -81,6 +81,6 @@ export class DOMModule implements IMeshModule {
             throw new Error('[DOMModule] Cannot render: root element not found.');
         }
         
-        component.mount(this.rootElement);
+        component.mount(this.rootElement, this.app);
     }
 }
