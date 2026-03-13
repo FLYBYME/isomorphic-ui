@@ -1,0 +1,80 @@
+:root {
+  /* Spacing Tokens */
+  --mesh-spacing-none: 0;
+  --mesh-spacing-xs: 0.25rem;   /* 4px */
+  --mesh-spacing-sm: 0.5rem;    /* 8px */
+  --mesh-spacing-md: 1rem;      /* 16px */
+  --mesh-spacing-lg: 1.5rem;    /* 24px */
+  --mesh-spacing-xl: 2rem;      /* 32px */
+  --mesh-spacing-2xl: 3rem;     /* 48px */
+
+  /* Typography Tokens */
+  --mesh-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mesh-font-size-base: 1rem;
+  --mesh-font-size-h1: 2.25rem;
+  --mesh-font-size-h2: 1.875rem;
+  --mesh-font-size-h3: 1.5rem;
+  --mesh-font-size-h4: 1.25rem;
+  --mesh-font-size-h5: 1.125rem;
+  --mesh-font-size-h6: 1rem;
+  --mesh-font-size-body: 1rem;
+  --mesh-font-size-caption: 0.875rem;
+  --mesh-font-size-code: 0.875rem;
+
+  /* Weights */
+  --mesh-font-weight-light: 300;
+  --mesh-font-weight-normal: 400;
+  --mesh-font-weight-medium: 500;
+  --mesh-font-weight-bold: 700;
+
+  /* Colors (Placeholder Palette - can be refined) */
+  --mesh-color-primary: #3b82f6;
+  --mesh-color-success: #10b981;
+  --mesh-color-warning: #f59e0b;
+  --mesh-color-danger: #ef4444;
+  --mesh-color-bg: #ffffff;
+  --mesh-color-text: #1f2937;
+  --mesh-color-border: #e5e7eb;
+}
+
+/* Base Utility Mapping */
+.mesh-box {
+  display: block;
+  box-sizing: border-box;
+}
+
+.mesh-box--fill {
+  width: 100%;
+  height: 100%;
+}
+
+.flex { display: flex; }
+.flex-row { flex-direction: row; }
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+
+.items-start { align-items: flex-start; }
+.items-center { align-items: center; }
+.items-end { align-items: flex-end; }
+.items-baseline { align-items: baseline; }
+.items-stretch { align-items: stretch; }
+
+.justify-start { justify-content: flex-start; }
+.justify-center { justify-content: center; }
+.justify-end { justify-content: flex-end; }
+.justify-between { justify-content: space-between; }
+.justify-around { justify-content: space-around; }
+.justify-evenly { justify-content: space-evenly; }
+
+/* Spacing Utilities mapping to variables */
+.p-xs { padding: var(--mesh-spacing-xs); }
+.p-sm { padding: var(--mesh-spacing-sm); }
+.p-md { padding: var(--mesh-spacing-md); }
+.p-lg { padding: var(--mesh-spacing-lg); }
+.p-xl { padding: var(--mesh-spacing-xl); }
+
+.gap-xs { gap: var(--mesh-spacing-xs); }
+.gap-sm { gap: var(--mesh-spacing-sm); }
+.gap-md { gap: var(--mesh-spacing-md); }
+.gap-lg { gap: var(--mesh-spacing-lg); }
+.gap-xl { gap: var(--mesh-spacing-xl); }
