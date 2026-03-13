@@ -1,4 +1,4 @@
-import { ReactiveState } from '@mesh-app/core';
+import { ReactiveState } from 'isomorphic-core';
 import { IBaseUIProps, ComponentChild } from '../types/ui.types';
 import { UIPlugin } from '../plugins/UIPlugin';
 
