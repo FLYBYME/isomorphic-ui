@@ -16,7 +16,7 @@ export class Box extends BrokerComponent {
     constructor(props: BoxProps) {
         // Validate specific Box props, pass rest to base
         const validated = BoxSchema.parse(props);
-        super(props.tagName || 'div', props);
+        super(props.as || props.tagName || 'div', props);
     }
 
     protected applyDOMProps(props: BoxProps): void {

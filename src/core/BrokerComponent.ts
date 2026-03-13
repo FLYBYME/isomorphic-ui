@@ -16,18 +16,20 @@ export abstract class BrokerComponent {
     private isDirty = false;
     protected unsubscribes: (() => void)[] = [];
     protected plugins: UIPlugin[] = [];
-    private oldTree: ComponentChild[] = [];
+    protected isFragment: boolean = false;
+    protected oldTree: ComponentChild[] = [];
 
     protected static RESERVED_PROPS = new Set([
         'children', 'style', 'className', 'tagName', 'variant', 'size', 
         'isDisabled', 'isLoading', 'flex', 'direction', 'gap', 'align', 
         'justify', 'wrap', 'span', 'padding', 'onClick', 'onChange', 
         'onInput', 'onKeyDown', 'onSubmit', 'type', 'placeholder', 
-        'value', 'disabled', 'href'
+        'value', 'disabled', 'href', 'as', 'key'
     ]);
 
     constructor(tagName: string = 'div', props: IBaseUIProps = {}) {
-        this.tagName = props.tagName || tagName;
+        this.tagName = props.as || props.tagName || tagName;
+        this.isFragment = this.tagName === 'fragment' || this.tagName === '';
         this.props = props;
     }
 
@@ -62,7 +64,11 @@ export abstract class BrokerComponent {
      * The rendering loop implementing the "Magic Sauce" logic.
      */
     protected performUpdate(): void {
-        if (!this.element) return;
+        const parent = this.element?.parentElement;
+        const activeElement = document.activeElement as HTMLInputElement;
+        const hasFocus = this.element?.contains(activeElement);
+        const selectionStart = hasFocus ? activeElement.selectionStart : null;
+        const selectionEnd = hasFocus ? activeElement.selectionEnd : null;
 
         // 1. Clear previous auto-subscriptions
         this.unsubscribeAll();
@@ -81,11 +87,22 @@ export abstract class BrokerComponent {
         const newTree = Array.isArray(buildResult) ? buildResult : [buildResult];
 
         // 3. Granular Patching
-        this.reconcile(this.oldTree, newTree, this.element);
+        if (this.isFragment && parent) {
+            this.reconcile(this.oldTree, newTree, parent);
+        } else if (this.element) {
+            this.reconcile(this.oldTree, newTree, this.element);
+            this.applyDOMProps(this.props);
+        }
+        
         this.oldTree = newTree;
 
-        // 4. Update Attributes & Props
-        this.applyDOMProps(this.props);
+        // 4. Restore Focus
+        if (hasFocus && activeElement && document.body.contains(activeElement)) {
+            activeElement.focus();
+            if (selectionStart !== null && selectionEnd !== null) {
+                activeElement.setSelectionRange(selectionStart, selectionEnd);
+            }
+        }
 
         // 5. Lifecycle hook for plugins
         for (const plugin of this.plugins) {
@@ -106,8 +123,9 @@ export abstract class BrokerComponent {
         
         // 1. Build a map of old keyed items
         oldTree.forEach((item, i) => {
-            if (item instanceof BrokerComponent && item.props.key != null) {
-                oldMap.set(item.props.key as string | number, { item, node: parent.childNodes[i], index: i });
+            const key = (item instanceof BrokerComponent) ? item.props.key : null;
+            if (key != null) {
+                oldMap.set(key as string | number, { item, node: parent.childNodes[i], index: i });
             }
         });
 
@@ -121,12 +139,11 @@ export abstract class BrokerComponent {
 
             // Addition
             if (oldItem == null && newItem != null) {
-                // Check if we can reuse a keyed node from elsewhere
-                if (newItem instanceof BrokerComponent && newItem.props.key != null && oldMap.has(newItem.props.key as any)) {
-                    const existing = oldMap.get(newItem.props.key as any)!;
+                const key = (newItem instanceof BrokerComponent) ? newItem.props.key : null;
+                if (key != null && oldMap.has(key as any)) {
+                    const existing = oldMap.get(key as any)!;
                     parent.insertBefore(existing.node, domNode || null);
-                    // Update the component instance
-                    this.patchComponent(existing.item as BrokerComponent, newItem);
+                    if (newItem instanceof BrokerComponent) this.patchComponent(existing.item as BrokerComponent, newItem);
                 } else {
                     const newNode = this.createNode(newItem);
                     parent.insertBefore(newNode, domNode || null);
@@ -146,7 +163,7 @@ export abstract class BrokerComponent {
                     const oldKey = oldItem.props.key;
                     const newKey = newItem.props.key;
 
-                    if (oldKey === newKey) {
+                    if (oldKey === newKey && oldItem.tagName === newItem.tagName) {
                         this.patchComponent(oldItem, newItem);
                     } else if (newKey != null && oldMap.has(newKey as any)) {
                         const existing = oldMap.get(newKey as any)!;
@@ -194,7 +211,12 @@ export abstract class BrokerComponent {
 
     private createNode(item: ComponentChild): Node {
         if (item instanceof BrokerComponent) {
-            if (!item.element) item.mount(document.createElement('div')); // Temporary parent
+            if (item.isFragment) {
+                const fragment = document.createDocumentFragment();
+                item.mount(fragment as any);
+                return fragment;
+            }
+            if (!item.element) item.mount(document.createElement('div')); 
             return item.element!;
         }
         return document.createTextNode(String(item ?? ''));
@@ -204,11 +226,15 @@ export abstract class BrokerComponent {
         // Plugin: onBeforeMount
         for (const plugin of this.plugins) plugin.onBeforeMount?.(this);
 
-        if (!this.element) {
-            this.element = document.createElement(this.tagName);
+        if (this.isFragment) {
+            this.performUpdate();
+        } else {
+            if (!this.element) {
+                this.element = document.createElement(this.tagName);
+            }
+            parent.appendChild(this.element);
+            this.performUpdate();
         }
-        parent.appendChild(this.element);
-        this.performUpdate();
         
         this.onMount();
         
@@ -293,5 +319,17 @@ export abstract class BrokerComponent {
      */
     public addSubscription(unsubscribe: () => void): void {
         this.unsubscribes.push(unsubscribe);
+    }
+}
+
+/**
+ * Fragment — Container that does not render a DOM wrapper.
+ */
+export class Fragment extends BrokerComponent {
+    constructor(props: IBaseUIProps = {}) {
+        super('fragment', props);
+    }
+    public build(): ComponentChild | ComponentChild[] {
+        return this.props.children || [];
     }
 }

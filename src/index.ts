@@ -7,3 +7,6 @@ export * from './primitives/Button';
 export * from './plugins/UIPlugin';
 export * from './modules/ThemeModule';
 export * from './types/ui.types';
+export * from './primitives/Image';
+export * from './primitives/ErrorBoundary';
+export * from './hooks/useForm';

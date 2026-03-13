@@ -30,6 +30,47 @@ export class DOMModule implements IMeshModule {
             this.rootElement.id = rootID;
             document.body.appendChild(this.rootElement);
         }
+
+        this.injectGlobalStyles();
+        this.initLoadingBar();
+    }
+
+    private injectGlobalStyles(): void {
+        const theme = this.app?.getProvider<any>('theme:tokens');
+        if (!theme) return;
+
+        const style = document.createElement('style');
+        style.id = 'mesh-dom-styles';
+        let css = `
+            :root {
+                ${Object.entries(theme.colors || {}).map(([k, v]) => `--color-${k}: ${v};`).join('\n')}
+                ${Object.entries(theme.spacing || {}).map(([k, v]) => `--spacing-${k}: ${v};`).join('\n')}
+            }
+            #mesh-loading-bar {
+                position: fixed; top: 0; left: 0; height: 3px; background: var(--color-primary, #3b82f6);
+                width: 0%; transition: width 0.2s; z-index: 9999;
+            }
+        `;
+        style.textContent = css;
+        document.head.appendChild(style);
+    }
+
+    private initLoadingBar(): void {
+        const bar = document.createElement('div');
+        bar.id = 'mesh-loading-bar';
+        document.body.appendChild(bar);
+
+        const broker = this.app?.getProvider<any>('broker');
+        setInterval(() => {
+            if (broker && broker.pendingCalls > 0) {
+                bar.style.width = '70%';
+                bar.style.opacity = '1';
+            } else {
+                bar.style.width = '100%';
+                bar.style.opacity = '0';
+                setTimeout(() => { bar.style.width = '0%'; }, 200);
+            }
+        }, 100);
     }
 
     /**
