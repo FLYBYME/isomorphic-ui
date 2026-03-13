@@ -99,9 +99,18 @@ export abstract class BrokerComponent {
     }
 
     /**
-     * Refined VDOM Reconciliation (Granular Patching)
+     * Refined VDOM Reconciliation with Keyed Support & Recursive Cleanup
      */
     private reconcile(oldTree: ComponentChild[], newTree: ComponentChild[], parent: HTMLElement): void {
+        const oldMap = new Map<string | number, { item: ComponentChild, node: Node, index: number }>();
+        
+        // 1. Build a map of old keyed items
+        oldTree.forEach((item, i) => {
+            if (item instanceof BrokerComponent && item.props.key != null) {
+                oldMap.set(item.props.key as string | number, { item, node: parent.childNodes[i], index: i });
+            }
+        });
+
         const max = Math.max(oldTree.length, newTree.length);
         let domIndex = 0;
 
@@ -112,33 +121,43 @@ export abstract class BrokerComponent {
 
             // Addition
             if (oldItem == null && newItem != null) {
-                const newNode = this.createNode(newItem);
-                parent.appendChild(newNode);
+                // Check if we can reuse a keyed node from elsewhere
+                if (newItem instanceof BrokerComponent && newItem.props.key != null && oldMap.has(newItem.props.key as any)) {
+                    const existing = oldMap.get(newItem.props.key as any)!;
+                    parent.insertBefore(existing.node, domNode || null);
+                    // Update the component instance
+                    this.patchComponent(existing.item as BrokerComponent, newItem);
+                } else {
+                    const newNode = this.createNode(newItem);
+                    parent.insertBefore(newNode, domNode || null);
+                }
                 domIndex++;
             }
             // Removal
             else if (oldItem != null && newItem == null) {
                 if (domNode) {
                     parent.removeChild(domNode);
-                    if (oldItem instanceof BrokerComponent) oldItem.unmount();
+                    this.cleanupNode(oldItem);
                 }
             }
             // Mutation or Replacement
             else if (oldItem != null && newItem != null) {
                 if (oldItem instanceof BrokerComponent && newItem instanceof BrokerComponent) {
-                    if (oldItem.constructor === newItem.constructor) {
-                        // Adopt existing component's element
-                        newItem.element = oldItem.element;
-                        newItem.oldTree = oldItem.oldTree;
-                        oldItem.unmount(false); // Silent unmount (don't detach)
-                        newItem.performUpdate();
+                    const oldKey = oldItem.props.key;
+                    const newKey = newItem.props.key;
+
+                    if (oldKey === newKey) {
+                        this.patchComponent(oldItem, newItem);
+                    } else if (newKey != null && oldMap.has(newKey as any)) {
+                        const existing = oldMap.get(newKey as any)!;
+                        parent.insertBefore(existing.node, domNode);
+                        this.patchComponent(existing.item as BrokerComponent, newItem);
                     } else {
                         const newNode = this.createNode(newItem);
                         parent.replaceChild(newNode, domNode);
-                        oldItem.unmount();
+                        this.cleanupNode(oldItem);
                     }
                 } else if (typeof oldItem !== 'object' && typeof newItem !== 'object') {
-                    // Text node patching
                     const newText = String(newItem);
                     if (domNode && domNode.nodeType === 3) {
                         if (domNode.nodeValue !== newText) domNode.nodeValue = newText;
@@ -146,12 +165,29 @@ export abstract class BrokerComponent {
                         parent.replaceChild(document.createTextNode(newText), domNode);
                     }
                 } else {
-                    // Mismatched types: Re-create
                     const newNode = this.createNode(newItem);
                     parent.replaceChild(newNode, domNode);
-                    if (oldItem instanceof BrokerComponent) oldItem.unmount();
+                    this.cleanupNode(oldItem);
                 }
                 domIndex++;
+            }
+        }
+    }
+
+    private patchComponent(oldComp: BrokerComponent, newComp: BrokerComponent): void {
+        newComp.element = oldComp.element;
+        newComp.oldTree = oldComp.oldTree;
+        newComp.unsubscribes = oldComp.unsubscribes; // Keep subscriptions? Actually performUpdate will re-sub
+        oldComp.unmount(false); 
+        newComp.performUpdate();
+    }
+
+    private cleanupNode(item: ComponentChild): void {
+        if (item instanceof BrokerComponent) {
+            item.unmount();
+            // Recursive cleanup for children if they weren't already handled by reconciliation
+            if (item.element) {
+                item.oldTree.forEach(child => this.cleanupNode(child));
             }
         }
     }
@@ -184,6 +220,11 @@ export abstract class BrokerComponent {
         this.unsubscribeAll();
         for (const plugin of this.plugins) plugin.onUnmount?.(this);
         
+        // Recursive cleanup for children (Task: Fix Memory Leaks)
+        if (this.oldTree) {
+            this.oldTree.forEach(child => this.cleanupNode(child));
+        }
+
         if (detach && this.element && this.element.parentElement) {
             this.element.parentElement.removeChild(this.element);
         }
@@ -203,13 +244,22 @@ export abstract class BrokerComponent {
         // 1. Class Orchestration
         const classes = new Set<string>();
         if (props.className) classes.add(props.className);
+        
+        // Handle Layout Props
         if (props.flex) classes.add('flex');
         if (props.direction) {
             const dir = props.direction === 'col' ? 'column' : props.direction;
             classes.add(`flex-${dir}`);
         }
-        if (props.gap && props.gap !== 'none') classes.add(`gap-${props.gap}`);
-        if (props.padding && props.padding !== 'none') classes.add(`p-${props.padding}`);
+        
+        // Use CSS Variables for tokens if possible
+        if (props.gap && props.gap !== 'none') {
+            this.element.style.gap = `var(--spacing-${props.gap}, ${props.gap})`;
+        }
+        if (props.padding && props.padding !== 'none') {
+            this.element.style.padding = `var(--spacing-${props.padding}, ${props.padding})`;
+        }
+
         if (props.align) classes.add(`items-${props.align}`);
         if (props.justify) classes.add(`justify-${props.justify}`);
         
@@ -217,6 +267,8 @@ export abstract class BrokerComponent {
 
         // 2. Normalized Event Handling
         if (props.onClick) this.element.onclick = props.onClick as any;
+        if (props.onChange) (this.element as any).onchange = props.onChange as any;
+        if (props.onInput) (this.element as any).oninput = props.onInput as any;
         
         // 3. Attribute Pass-through
         if (props.id) this.element.id = props.id;
@@ -228,7 +280,7 @@ export abstract class BrokerComponent {
             input.value = String(props.value);
         }
 
-        // Custom pass-through
+        // Custom pass-through (attributes)
         for (const [key, val] of Object.entries(props)) {
             if (!BrokerComponent.RESERVED_PROPS.has(key) && typeof val !== 'function') {
                 this.element.setAttribute(key.toLowerCase(), String(val));

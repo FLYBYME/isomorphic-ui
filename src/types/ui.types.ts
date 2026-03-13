@@ -8,6 +8,7 @@ export type ComponentChild = any; // Will be refined to BrokerComponent | string
 
 export interface IBaseUIProps {
     id?: string;
+    key?: string | number;
     className?: string;
     tagName?: string;
     variant?: string;
