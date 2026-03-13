@@ -1,5 +1,6 @@
 import { IMeshModule, IMeshApp } from '@mesh-app/core';
 import { BrokerComponent } from '../core/BrokerComponent';
+import { RouterView } from '../primitives/RouterView';
 
 /**
  * DOMModule — Mounts the Virtual DOM to the browser's document and manages root rendering.
@@ -71,6 +72,15 @@ export class DOMModule implements IMeshModule {
                 setTimeout(() => { bar.style.width = '0%'; }, 200);
             }
         }, 100);
+    }
+
+    async onReady(app: IMeshApp): Promise<void> {
+        if (typeof document === 'undefined') return;
+
+        // Task 2: Auto-mount RouterView
+        const view = new RouterView();
+        this.render(view);
+        console.log('[DOMModule] RouterView auto-mounted.');
     }
 
     /**
