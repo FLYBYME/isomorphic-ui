@@ -16,16 +16,18 @@ export class Box extends BrokerComponent {
     constructor(props: BoxProps) {
         // Validate specific Box props, pass rest to base
         const validated = BoxSchema.parse(props);
-        super(props.as || props.tagName || 'div', props);
+        super((props.as as string) || props.tagName || 'div', props);
     }
 
     protected applyDOMProps(props: BoxProps): void {
         super.applyDOMProps(props);
-        if (props.fill && this.element) {
+        if (!(this.element instanceof HTMLElement)) return;
+        
+        if (props.fill) {
             this.element.classList.add('mesh-box--fill');
         }
-        if (!this.element?.classList.contains('mesh-box')) {
-            this.element?.classList.add('mesh-box');
+        if (!this.element.classList.contains('mesh-box')) {
+            this.element.classList.add('mesh-box');
         }
     }
 

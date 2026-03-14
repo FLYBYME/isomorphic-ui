@@ -1,4 +1,4 @@
-import { ReactiveState } from '@mesh-app/core';
+import { ReactiveState } from 'isomorphic-core';
 import { IBaseUIProps, ComponentChild } from '../types/ui.types';
 import { UIPlugin } from '../plugins/UIPlugin';
 
@@ -6,7 +6,7 @@ import { UIPlugin } from '../plugins/UIPlugin';
  * BrokerComponent — The modern UI base with "Magic Sauce" auto-subscription.
  */
 export abstract class BrokerComponent {
-    public element: HTMLElement | null = null;
+    public element: HTMLElement | DocumentFragment | null = null;
     public readonly tagName: string;
     public props: IBaseUIProps;
     
@@ -18,17 +18,25 @@ export abstract class BrokerComponent {
     protected plugins: UIPlugin[] = [];
     protected isFragment: boolean = false;
     protected oldTree: ComponentChild[] = [];
+    protected app?: any;
+
+    public onMount(): void {}
+    public onUnmount(): void {}
+
+    protected performUpdate(): void {
+        this.render();
+    }
 
     protected static RESERVED_PROPS = new Set([
         'children', 'style', 'className', 'tagName', 'variant', 'size', 
         'isDisabled', 'isLoading', 'flex', 'direction', 'gap', 'align', 
         'justify', 'wrap', 'span', 'padding', 'onClick', 'onChange', 
-        'onInput', 'onKeyDown', 'onSubmit', 'type', 'placeholder', 
+        'onInput', 'onKeyDown', 'onKeyUp', 'onSubmit', 'type', 'placeholder', 
         'value', 'disabled', 'href', 'as', 'key'
     ]);
 
     constructor(tagName: string = 'div', props: IBaseUIProps = {}) {
-        this.tagName = props.as || props.tagName || tagName;
+        this.tagName = (props.as as string) || (props.tagName as string) || tagName;
         this.isFragment = this.tagName === 'fragment' || this.tagName === '';
         this.props = props;
     }
@@ -41,297 +49,152 @@ export abstract class BrokerComponent {
     }
 
     /**
-     * The structural definition of the component.
+     * The main template method. Components must implement this.
      */
-    public abstract build(): ComponentChild | ComponentChild[];
+    public abstract build(): ComponentChild;
 
     /**
-     * Queues a rendering microtask.
+     * Internal render logic with differential DOM updates.
      */
-    public update(): void {
-        if (this.isDirty || !this.element) return;
+    public render(): HTMLElement | DocumentFragment {
+        const prevSubscriber = BrokerComponent.currentSubscriber;
+        BrokerComponent.currentSubscriber = this;
+        (globalThis as any).MeshMagicSauce = { currentSubscriber: this };
+
+        try {
+            if (!this.element) {
+                this.element = this.createElement();
+                this.applyDOMProps(this.props);
+            }
+
+            const newTree = this.normalizeTree(this.build());
+            this.reconcile(this.element, this.oldTree, newTree);
+            this.oldTree = newTree;
+
+            return this.element as any;
+        } finally {
+            BrokerComponent.currentSubscriber = prevSubscriber;
+            (globalThis as any).MeshMagicSauce = { currentSubscriber: prevSubscriber };
+        }
+    }
+
+    private createElement(): HTMLElement | DocumentFragment {
+        if (this.isFragment) return document.createDocumentFragment();
+        return document.createElement(this.tagName);
+    }
+
+    protected applyDOMProps(props: IBaseUIProps): void {
+        if (!this.element || this.isFragment) return;
+        const el = this.element as HTMLElement;
+
+        if (props.className) el.className = props.className;
+        if (props.style) Object.assign(el.style, props.style);
+
+        // Events
+        if (props.onClick) el.onclick = (e: MouseEvent) => props.onClick!(e);
+        if (props.onChange) el.onchange = (e: Event) => props.onChange!(e);
+        if (props.onInput) el.oninput = (e: Event) => props.onInput!(e);
+        if (props.onKeyDown) el.onkeydown = (e: KeyboardEvent) => props.onKeyDown!(e);
+
+        // Attributes
+        for (const [key, value] of Object.entries(props)) {
+            if (BrokerComponent.RESERVED_PROPS.has(key)) continue;
+            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                el.setAttribute(key, String(value));
+            }
+        }
+    }
+
+    private normalizeTree(child: ComponentChild): ComponentChild[] {
+        if (Array.isArray(child)) return child.flat();
+        if (child === null || child === undefined || child === false) return [];
+        return [child];
+    }
+
+    private reconcile(parent: HTMLElement | DocumentFragment, oldTree: ComponentChild[], newTree: ComponentChild[]): void {
+        const maxLength = Math.max(oldTree.length, newTree.length);
+        for (let i = 0; i < maxLength; i++) {
+            this.updateChild(parent, oldTree[i], newTree[i], i);
+        }
+    }
+
+    private updateChild(parent: HTMLElement | DocumentFragment, oldChild: ComponentChild, newChild: ComponentChild, index: number): void {
+        const currentDOM = parent.childNodes[index];
+
+        // 1. Remove
+        if (newChild === undefined) {
+            if (currentDOM) parent.removeChild(currentDOM);
+            return;
+        }
+
+        // 2. Add
+        if (oldChild === undefined) {
+            parent.appendChild(this.renderChild(newChild));
+            return;
+        }
+
+        // 3. Replace or Update
+        if (this.hasChanged(oldChild, newChild)) {
+            parent.replaceChild(this.renderChild(newChild), currentDOM);
+        } else if (newChild instanceof BrokerComponent) {
+            newChild.render();
+        }
+    }
+
+    private hasChanged(a: ComponentChild, b: ComponentChild): boolean {
+        if (typeof a !== typeof b) return true;
+        if (typeof a === 'string' || typeof a === 'number') return a !== b;
+        if (a instanceof BrokerComponent && b instanceof BrokerComponent) {
+            return a.constructor !== b.constructor;
+        }
+        return true;
+    }
+
+    private renderChild(child: ComponentChild): Node {
+        if (child instanceof BrokerComponent) return child.render();
+        return document.createTextNode(String(child));
+    }
+
+    /**
+     * Magic Sauce: The Track mechanism for auto-reactive UI.
+     */
+    protected track<T extends object>(state: ReactiveState<T>): T {
+        if (BrokerComponent.currentSubscriber === this) return state.data;
+        
+        const unsub = state.subscribeGlobal(() => this.invalidate());
+        this.unsubscribes.push(unsub);
+        return state.data;
+    }
+
+    public invalidate(): void {
+        if (this.isDirty) return;
         this.isDirty = true;
         
-        queueMicrotask(() => {
-            if (this.isDirty) {
-                this.performUpdate();
-                this.isDirty = false;
-            }
-        });
-    }
-
-    /**
-     * The rendering loop implementing the "Magic Sauce" logic.
-     */
-    protected performUpdate(): void {
-        const parent = this.element?.parentElement;
-        const activeElement = document.activeElement as HTMLInputElement;
-        const hasFocus = this.element?.contains(activeElement);
-        const selectionStart = hasFocus ? activeElement.selectionStart : null;
-        const selectionEnd = hasFocus ? activeElement.selectionEnd : null;
-
-        // 1. Clear previous auto-subscriptions
-        this.unsubscribeAll();
-
-        // 2. THE MAGIC SAUCE: Capture dependencies during build()
-        const previousSubscriber = BrokerComponent.currentSubscriber;
-        BrokerComponent.currentSubscriber = this;
-        
-        let buildResult: ComponentChild | ComponentChild[];
-        try {
-            buildResult = this.build();
-        } finally {
-            BrokerComponent.currentSubscriber = previousSubscriber;
-        }
-
-        const newTree = Array.isArray(buildResult) ? buildResult : [buildResult];
-
-        // 3. Granular Patching
-        if (this.isFragment && parent) {
-            this.reconcile(this.oldTree, newTree, parent);
-        } else if (this.element) {
-            this.reconcile(this.oldTree, newTree, this.element);
-            this.applyDOMProps(this.props);
-        }
-        
-        this.oldTree = newTree;
-
-        // 4. Restore Focus
-        if (hasFocus && activeElement && document.body.contains(activeElement)) {
-            activeElement.focus();
-            if (selectionStart !== null && selectionEnd !== null) {
-                activeElement.setSelectionRange(selectionStart, selectionEnd);
-            }
-        }
-
-        // 5. Lifecycle hook for plugins
-        for (const plugin of this.plugins) {
-            plugin.onUpdated?.(this);
-        }
-    }
-
-    protected unsubscribeAll(): void {
-        for (const unsub of this.unsubscribes) unsub();
-        this.unsubscribes = [];
-    }
-
-    /**
-     * Refined VDOM Reconciliation with Keyed Support & Recursive Cleanup
-     */
-    private reconcile(oldTree: ComponentChild[], newTree: ComponentChild[], parent: HTMLElement): void {
-        const oldMap = new Map<string | number, { item: ComponentChild, node: Node, index: number }>();
-        
-        // 1. Build a map of old keyed items
-        oldTree.forEach((item, i) => {
-            const key = (item instanceof BrokerComponent) ? item.props.key : null;
-            if (key != null) {
-                oldMap.set(key as string | number, { item, node: parent.childNodes[i], index: i });
-            }
-        });
-
-        const max = Math.max(oldTree.length, newTree.length);
-        let domIndex = 0;
-
-        for (let i = 0; i < max; i++) {
-            const oldItem = oldTree[i];
-            const newItem = newTree[i];
-            let domNode = parent.childNodes[domIndex];
-
-            // Addition
-            if (oldItem == null && newItem != null) {
-                const key = (newItem instanceof BrokerComponent) ? newItem.props.key : null;
-                if (key != null && oldMap.has(key as any)) {
-                    const existing = oldMap.get(key as any)!;
-                    parent.insertBefore(existing.node, domNode || null);
-                    if (newItem instanceof BrokerComponent) this.patchComponent(existing.item as BrokerComponent, newItem);
-                } else {
-                    const newNode = this.createNode(newItem);
-                    parent.insertBefore(newNode, domNode || null);
-                }
-                domIndex++;
-            }
-            // Removal
-            else if (oldItem != null && newItem == null) {
-                if (domNode) {
-                    parent.removeChild(domNode);
-                    this.cleanupNode(oldItem);
-                }
-            }
-            // Mutation or Replacement
-            else if (oldItem != null && newItem != null) {
-                if (oldItem instanceof BrokerComponent && newItem instanceof BrokerComponent) {
-                    const oldKey = oldItem.props.key;
-                    const newKey = newItem.props.key;
-
-                    if (oldKey === newKey && oldItem.tagName === newItem.tagName) {
-                        this.patchComponent(oldItem, newItem);
-                    } else if (newKey != null && oldMap.has(newKey as any)) {
-                        const existing = oldMap.get(newKey as any)!;
-                        parent.insertBefore(existing.node, domNode);
-                        this.patchComponent(existing.item as BrokerComponent, newItem);
-                    } else {
-                        const newNode = this.createNode(newItem);
-                        parent.replaceChild(newNode, domNode);
-                        this.cleanupNode(oldItem);
-                    }
-                } else if (typeof oldItem !== 'object' && typeof newItem !== 'object') {
-                    const newText = String(newItem);
-                    if (domNode && domNode.nodeType === 3) {
-                        if (domNode.nodeValue !== newText) domNode.nodeValue = newText;
-                    } else {
-                        parent.replaceChild(document.createTextNode(newText), domNode);
-                    }
-                } else {
-                    const newNode = this.createNode(newItem);
-                    parent.replaceChild(newNode, domNode);
-                    this.cleanupNode(oldItem);
-                }
-                domIndex++;
-            }
-        }
-    }
-
-    private patchComponent(oldComp: BrokerComponent, newComp: BrokerComponent): void {
-        newComp.element = oldComp.element;
-        newComp.oldTree = oldComp.oldTree;
-        newComp.unsubscribes = oldComp.unsubscribes; // Keep subscriptions? Actually performUpdate will re-sub
-        oldComp.unmount(false); 
-        newComp.performUpdate();
-    }
-
-    private cleanupNode(item: ComponentChild): void {
-        if (item instanceof BrokerComponent) {
-            item.unmount();
-            // Recursive cleanup for children if they weren't already handled by reconciliation
-            if (item.element) {
-                item.oldTree.forEach(child => this.cleanupNode(child));
-            }
-        }
-    }
-
-    private createNode(item: ComponentChild): Node {
-        if (item instanceof BrokerComponent) {
-            if (item.isFragment) {
-                const fragment = document.createDocumentFragment();
-                item.mount(fragment as any);
-                return fragment;
-            }
-            if (!item.element) item.mount(document.createElement('div')); 
-            return item.element!;
-        }
-        return document.createTextNode(String(item ?? ''));
-    }
-
-    public mount(parent: HTMLElement, app?: any): void {
-        if (app) (this as any).app = app;
-        
-        // Plugin: onBeforeMount
-        for (const plugin of this.plugins) plugin.onBeforeMount?.(this);
-
-        if (this.isFragment) {
+        // Batch updates to next macro-task
+        setTimeout(() => {
             this.performUpdate();
-        } else {
-            if (!this.element) {
-                this.element = document.createElement(this.tagName);
-            }
-            parent.appendChild(this.element);
-            this.performUpdate();
-        }
-        
+            this.isDirty = false;
+        }, 0);
+    }
+
+    public mount(parent: HTMLElement | DocumentFragment, app?: any): HTMLElement | DocumentFragment {
+        if (app) this.app = app;
+        const el = this.render();
+        parent.appendChild(el);
         this.onMount();
-        
-        // Plugin: onMounted (Fires AFTER component onMount)
-        for (const plugin of this.plugins) plugin.onMounted?.(this);
+        return el;
     }
 
-    public unmount(detach: boolean = true): void {
-        this.unsubscribeAll();
-        for (const plugin of this.plugins) plugin.onUnmount?.(this);
-        
-        // Recursive cleanup for children (Task: Fix Memory Leaks)
-        if (this.oldTree) {
-            this.oldTree.forEach(child => this.cleanupNode(child));
-        }
-
-        if (detach && this.element && this.element.parentElement) {
-            this.element.parentElement.removeChild(this.element);
-        }
-        
+    public unmount(): void {
         this.onUnmount();
+        this.destroy();
     }
 
-    public onMount(): void {}
-    public onUnmount(): void {}
-
-    /**
-     * Maps props to CSS Variables / Utilities & DOM Attributes.
-     */
-    protected applyDOMProps(props: IBaseUIProps): void {
-        if (!this.element) return;
-
-        // 1. Class Orchestration
-        const classes = new Set<string>();
-        if (props.className) classes.add(props.className);
-        
-        // Handle Layout Props
-        if (props.flex) classes.add('flex');
-        if (props.direction) {
-            const dir = props.direction === 'col' ? 'column' : props.direction;
-            classes.add(`flex-${dir}`);
+    public destroy(): void {
+        this.unsubscribes.forEach(u => u());
+        this.unsubscribes = [];
+        if (this.element && this.element.parentNode) {
+            this.element.parentNode.removeChild(this.element);
         }
-        
-        // Use CSS Variables for tokens if possible
-        if (props.gap && props.gap !== 'none') {
-            this.element.style.gap = `var(--spacing-${props.gap}, ${props.gap})`;
-        }
-        if (props.padding && props.padding !== 'none') {
-            this.element.style.padding = `var(--spacing-${props.padding}, ${props.padding})`;
-        }
-
-        if (props.align) classes.add(`items-${props.align}`);
-        if (props.justify) classes.add(`justify-${props.justify}`);
-        
-        this.element.className = Array.from(classes).join(' ');
-
-        // 2. Normalized Event Handling
-        if (props.onClick) this.element.onclick = props.onClick as any;
-        if (props.onChange) (this.element as any).onchange = props.onChange as any;
-        if (props.onInput) (this.element as any).oninput = props.onInput as any;
-        
-        // 3. Attribute Pass-through
-        if (props.id) this.element.id = props.id;
-        if (props.role) this.element.setAttribute('role', props.role);
-        
-        // Form properties
-        const input = this.element as HTMLInputElement;
-        if (props.value !== undefined && input.value !== String(props.value)) {
-            input.value = String(props.value);
-        }
-
-        // Custom pass-through (attributes)
-        for (const [key, val] of Object.entries(props)) {
-            if (!BrokerComponent.RESERVED_PROPS.has(key) && typeof val !== 'function') {
-                this.element.setAttribute(key.toLowerCase(), String(val));
-            }
-        }
-    }
-
-    /**
-     * Allow ReactiveState to record this component as a listener.
-     */
-    public addSubscription(unsubscribe: () => void): void {
-        this.unsubscribes.push(unsubscribe);
-    }
-}
-
-/**
- * Fragment — Container that does not render a DOM wrapper.
- */
-export class Fragment extends BrokerComponent {
-    constructor(props: IBaseUIProps = {}) {
-        super('fragment', props);
-    }
-    public build(): ComponentChild | ComponentChild[] {
-        return this.props.children || [];
     }
 }

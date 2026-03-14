@@ -18,8 +18,8 @@ export class Stack extends Box {
 
     protected applyDOMProps(props: StackProps): void {
         super.applyDOMProps(props);
-        if (props.isDivided) {
-            this.element?.classList.add('mesh-stack--divided');
+        if (props.isDivided && this.element instanceof HTMLElement) {
+            this.element.classList.add('mesh-stack--divided');
         }
     }
 }

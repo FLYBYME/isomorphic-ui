@@ -14,12 +14,14 @@
     "baseUrl": ".",
     "paths": {
       "isomorphic-core": ["../isomorphic-core/src/index"],
+      "isomorphic-mesh": ["../isomorphic-mesh/src/index"],
       "isomorphic-registry": ["../isomorphic-registry/src/index"]
     }
   },
   "include": ["src/**/*"],
   "references": [
     { "path": "../isomorphic-core" },
+    { "path": "../isomorphic-mesh" },
     { "path": "../isomorphic-registry" }
   ]
 }

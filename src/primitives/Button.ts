@@ -11,13 +11,10 @@ export class Button extends BrokerComponent {
 
     protected applyDOMProps(props: IBaseUIProps): void {
         super.applyDOMProps(props);
-        if (!this.element) return;
+        if (!(this.element instanceof HTMLElement)) return;
         
         this.element.classList.add('mesh-button');
         if (props.variant) this.element.classList.add(`mesh-button--${props.variant}`);
-        
-        // Event delegation note: 
-        // For a single button, we use direct listener, but for lists we'd use delegation.
     }
 
     public build(): ComponentChild | ComponentChild[] {
