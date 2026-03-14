@@ -1,4 +1,4 @@
-import { ReactiveState } from 'isomorphic-core';
+import { ReactiveState } from '../core/ReactiveState';
 
 /**
  * useForm — Binds ReactiveState paths directly to input values with automatic change tracking.

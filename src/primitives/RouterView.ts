@@ -1,6 +1,6 @@
 import { BrokerComponent } from '../core/BrokerComponent';
 import { ComponentChild } from '../types/ui.types';
-import { ReactiveState } from 'isomorphic-core';
+import { ReactiveState } from '../core/ReactiveState';
 
 /**
  * <RouterView> — Subscribes to $router.current and renders the matched component.

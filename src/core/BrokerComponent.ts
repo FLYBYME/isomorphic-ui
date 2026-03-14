@@ -1,4 +1,4 @@
-import { ReactiveState } from 'isomorphic-core';
+import { ReactiveState } from './ReactiveState';
 import { IBaseUIProps, ComponentChild } from '../types/ui.types';
 import { UIPlugin } from '../plugins/UIPlugin';
 

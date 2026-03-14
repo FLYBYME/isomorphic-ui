@@ -1,4 +1,5 @@
-import { IMeshModule, IMeshApp, ReactiveState } from 'isomorphic-core';
+import { IMeshModule, IMeshApp } from 'isomorphic-core';
+import { ReactiveState } from '../core/ReactiveState';
 import { RouteConfig, RouterState } from '../types/router.types';
 
 /**

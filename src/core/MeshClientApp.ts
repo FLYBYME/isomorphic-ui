@@ -1,24 +1,24 @@
-
 import {
     IMeshApp,
     IMeshModule,
     AppConfig,
     ProviderToken,
-    IServiceBroker,
     MeshActionRegistry,
     MeshEventRegistry,
-    MeshApp, // Import the headless MeshApp
-    ILogger // Import ILogger for explicit typing
+    MeshApp,
+    ILogger
 } from 'isomorphic-core';
-import { ReactiveState } from './ReactiveState'; // Import the moved ReactiveState
+import { ReactiveState } from './ReactiveState';
+import { Context, ServiceSchema } from 'isomorphic-registry';
 
 /**
  * MeshClientApp — Specialized shell for frontend/browser environments.
  * It composes the headless MeshApp and integrates browser-specific reactivity.
+ * * @template TState - The shape of the application's reactive state.
  */
-export class MeshClientApp implements IMeshApp {
+export class MeshClientApp<TState extends Record<string, unknown> = Record<string, unknown>> implements IMeshApp {
     private readonly meshApp: MeshApp;
-    public readonly reactiveState: ReactiveState<any>; // Expose ReactiveState for UI use
+    public readonly reactiveState: ReactiveState<TState>;
 
     // Expose properties from the composed MeshApp instance
     public get nodeID(): string { return this.meshApp.nodeID; }
@@ -26,30 +26,26 @@ export class MeshClientApp implements IMeshApp {
     public get config(): AppConfig { return this.meshApp.config; }
     public get logger(): ILogger { return this.meshApp.logger; }
 
-    constructor(config: AppConfig) {
+    constructor(config: AppConfig, initialState?: TState) {
         // Initialize the headless MeshApp
         this.meshApp = new MeshApp(config);
 
-        // Initialize ReactiveState for UI reactivity.
-        // You might want to pass an initial state from config or elsewhere.
-        this.reactiveState = new ReactiveState<any>({}); 
+        // Initialize ReactiveState using the provided generic state type
+        this.reactiveState = new ReactiveState<TState>(initialState ?? ({} as TState));
 
-        // Register ReactiveState as a provider if it needs to be accessed by services
-        // You might want to use a specific token for reactiveState, e.g., 'reactiveState'
+        // Register ReactiveState as a provider
         this.meshApp.registerProvider('reactiveState', this.reactiveState);
-        
-        // If the original MeshClientApp had specific providers or services to register,
-        // they should be registered on this.meshApp here. For example:
-        // this.meshApp.registerProvider('someToken', someProvider);
     }
 
-    // Delegate core IMeshApp methods to the internal MeshApp instance
-    public use(moduleOrMiddleware: IMeshModule | ((ctx: any, next: () => Promise<any>) => Promise<any>)): this {
+    // Delegate core IMeshApp methods to the internal MeshApp instance, strictly typed
+    public use<TContextData = unknown>(
+        moduleOrMiddleware: IMeshModule | ((ctx: Context<TContextData>, next: () => Promise<unknown>) => Promise<unknown>)
+    ): this {
         this.meshApp.use(moduleOrMiddleware);
         return this;
     }
 
-    public registerService(service: unknown): this {
+    public registerService(service: ServiceSchema): this {
         this.meshApp.registerService(service);
         return this;
     }
@@ -62,19 +58,25 @@ export class MeshClientApp implements IMeshApp {
         return this.meshApp.getProvider(token);
     }
 
-    public async call<TAction extends keyof MeshActionRegistry, TParams extends MeshActionRegistry[TAction] extends { params: infer P } ? P : any, TReturn extends MeshActionRegistry[TAction] extends { returns: infer R } ? R : any>(action: TAction, params: TParams): Promise<TReturn> {
+    // Strictly infers parameter and return types based on the Action Registry, using `never` and `unknown` instead of `any`
+    public async call<
+        TAction extends keyof MeshActionRegistry,
+        TParams extends (MeshActionRegistry[TAction] extends { params: infer P } ? P : never),
+        TReturn extends (MeshActionRegistry[TAction] extends { returns: infer R } ? R : unknown)
+    >(action: TAction, params: TParams): Promise<TReturn> {
         return this.meshApp.call(action, params);
     }
 
-    public emit<TEvent extends keyof MeshEventRegistry, TPayload extends MeshEventRegistry[TEvent]>(event: TEvent, payload: TPayload): void {
+    public emit<
+        TEvent extends keyof MeshEventRegistry,
+        TPayload extends MeshEventRegistry[TEvent]
+    >(event: TEvent, payload: TPayload): void {
         this.meshApp.emit(event, payload);
     }
 
     public async start(): Promise<void> {
-        // Any UI-specific startup logic can be placed here, before or after meshApp.start()
         this.logger.info('🚀 MeshClientApp (UI): Starting boot sequence...');
         await this.meshApp.start();
-        // After MeshApp starts, other UI components can be initialized or rendered.
         this.logger.info('✅ MeshClientApp (UI): Ready.');
     }
 

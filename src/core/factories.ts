@@ -1,5 +1,6 @@
 import { MeshClientApp } from './MeshClientApp';
-import { StateModule, BrokerModule } from 'isomorphic-core';
+import { StateModule } from '../modules/StateModule';
+import { BrokerModule } from 'isomorphic-core';
 import { ClientNetworkModule } from '../modules/ClientNetworkModule';
 import { DOMModule } from '../dom/DOMModule';
 import { RouterModule } from '../modules/RouterModule';

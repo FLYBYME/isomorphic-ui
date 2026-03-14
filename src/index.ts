@@ -1,4 +1,6 @@
 export * from './core/BrokerComponent';
+export * from './core/ReactiveState';
+export * from './modules/StateModule';
 export * from './dom/DOMModule';
 export * from './primitives/Box';
 export * from './primitives/Typography';
