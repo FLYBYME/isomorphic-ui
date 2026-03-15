@@ -2,9 +2,9 @@ import {
     IMeshApp,
     IMeshModule,
     AppConfig,
-    ProviderToken,
-    MeshActionRegistry,
-    MeshEventRegistry,
+    IProviderToken,
+    IServiceActionRegistry as MeshActionRegistry,
+    IServiceEventRegistry as MeshEventRegistry,
     MeshApp,
     ILogger
 } from 'isomorphic-core';
@@ -50,11 +50,11 @@ export class MeshClientApp<TState extends Record<string, unknown> = Record<strin
         return this;
     }
 
-    public registerProvider<T>(token: ProviderToken<T>, provider: T): void {
+    public registerProvider<T>(token: IProviderToken<T>, provider: T): void {
         this.meshApp.registerProvider(token, provider);
     }
 
-    public getProvider<T>(token: ProviderToken<T>): T {
+    public getProvider<T>(token: IProviderToken<T>): T {
         return this.meshApp.getProvider(token);
     }
 
@@ -64,7 +64,7 @@ export class MeshClientApp<TState extends Record<string, unknown> = Record<strin
         TParams extends (MeshActionRegistry[TAction] extends { params: infer P } ? P : never),
         TReturn extends (MeshActionRegistry[TAction] extends { returns: infer R } ? R : unknown)
     >(action: TAction, params: TParams): Promise<TReturn> {
-        return this.meshApp.call(action, params);
+        return this.meshApp.call(action as string, params) as Promise<TReturn>;
     }
 
     public emit<
