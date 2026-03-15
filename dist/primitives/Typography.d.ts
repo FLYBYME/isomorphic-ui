@@ -8,12 +8,12 @@ export declare const TypographySchema: z.ZodObject<{
     text: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     variant: "body" | "caption" | "code" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
-    textAlign?: "center" | "justify" | "left" | "right" | undefined;
+    textAlign?: "justify" | "center" | "left" | "right" | undefined;
     weight?: "light" | "normal" | "medium" | "bold" | undefined;
     text?: string | undefined;
 }, {
     variant?: "body" | "caption" | "code" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | undefined;
-    textAlign?: "center" | "justify" | "left" | "right" | undefined;
+    textAlign?: "justify" | "center" | "left" | "right" | undefined;
     weight?: "light" | "normal" | "medium" | "bold" | undefined;
     text?: string | undefined;
 }>;

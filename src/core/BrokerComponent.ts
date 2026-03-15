@@ -70,12 +70,14 @@ export abstract class BrokerComponent {
         // 2. THE MAGIC SAUCE: Capture dependencies during build()
         const previousSubscriber = BrokerComponent.currentSubscriber;
         BrokerComponent.currentSubscriber = this;
+        ReactiveState.currentSubscriber = this;
         
         let buildResult: ComponentChild | ComponentChild[];
         try {
             buildResult = this.build();
         } finally {
             BrokerComponent.currentSubscriber = previousSubscriber;
+            ReactiveState.currentSubscriber = previousSubscriber;
         }
 
         const newTree = Array.isArray(buildResult) ? buildResult : [buildResult];

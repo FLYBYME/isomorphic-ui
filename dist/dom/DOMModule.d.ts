@@ -1,4 +1,4 @@
-import { IMeshModule, IMeshApp } from '@mesh-app/core';
+import { IMeshModule, IMeshApp } from 'isomorphic-core';
 import { BrokerComponent } from '../core/BrokerComponent';
 /**
  * DOMModule — Mounts the Virtual DOM to the browser's document and manages root rendering.

@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BrokerComponent = void 0;
+const isomorphic_core_1 = require("isomorphic-core");
 /**
  * BrokerComponent — The modern UI base with "Magic Sauce" auto-subscription.
  */
@@ -45,12 +46,14 @@ class BrokerComponent {
         // 2. THE MAGIC SAUCE: Capture dependencies during build()
         const previousSubscriber = BrokerComponent.currentSubscriber;
         BrokerComponent.currentSubscriber = this;
+        isomorphic_core_1.ReactiveState.currentSubscriber = this;
         let buildResult;
         try {
             buildResult = this.build();
         }
         finally {
             BrokerComponent.currentSubscriber = previousSubscriber;
+            isomorphic_core_1.ReactiveState.currentSubscriber = previousSubscriber;
         }
         const newTree = Array.isArray(buildResult) ? buildResult : [buildResult];
         // 3. Granular Patching
